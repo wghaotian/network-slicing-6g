@@ -139,3 +139,4 @@ if __name__ == '__main__':
     lefthand = substituted_inequality_43(mu_star_2, cus, lambdas, epsilon)
     assert(lefthand > 0)
     print(f"lefthand: {lefthand}, K_prime_2: {K_prime_2}")
+    print("Test successful!")
