@@ -4,6 +4,23 @@ from scipy import optimize
 
 def calc_bus_and_cus(V: np.ndarray, B: float, delta: float, gamma: np.ndarray, Q_inv_epsilon: float,
                      kus: np.ndarray) -> (np.ndarray, np.ndarray):
+    # TO IMPLEMENT 2024.08.30
+    # Gaussian Q-Function
+    # Consider flat rate, where gamma[u][k] = gamma[u], V[u][k] = V[u]
+    # Compare results with Markov results (30), plot it
+    #  Plot 1:
+    #      Fixed epsilon in [1e-5, 1e-3]
+    #      x-axis: the expectation of lambdas, which follows a certain distribution
+    #      y-axis: K' calculated by implemented function and markov inequality
+    #      Plot different curves with different mean value of SINR (gamma), can follow rayleigh distribution
+    #  Plot 2:
+    #      Fixed gamma following rayleigh distribution
+    #      x-axis: epsilon
+    #      y-axis: K' and K from (30)
+    #      Plot different curves with different lambda
+
+    # Verify (25) using Monte Carlo
+    #   K_puncture: (10)
     """
     Calculates the b value for the given $$V, B, \delta, \gamma and Q^{-1}(\epsilon)$$
     params:
@@ -116,13 +133,14 @@ def find_K_prime(lambdas: np.ndarray, bus: np.ndarray, cus: np.ndarray, epsilon:
 
 
 if __name__ == '__main__':
-    num_users = 100
+    num_users = 10000
     bus = np.random.rand(num_users)
     cus = np.random.rand(num_users)
     lambdas = np.random.rand(num_users)
     K_prime = np.random.randint(num_users) + np.floor( 4 * np.sum(bus ** 2)) + 1
     mu_star = solve_mu_star(K_prime=K_prime, bus=bus, cus=cus, lambdas=lambdas)
-    print(f"K_prime: {K_prime}, bus: {bus}, cus: {cus}, lambdas: {lambdas}, mu_star: {mu_star}")
+    # print(f"bus: {bus}, cus: {cus}")
+    print(f"K_prime: {K_prime}, lambdas: {lambdas}, mu_star: {mu_star}")
     print(f"K_prime(mu_star):{calc_K_prime_given_mu_star(mu_star, bus, cus, lambdas, False)}")
     epsilon = np.random.rand()
     print(f"epsilon: {epsilon}")
