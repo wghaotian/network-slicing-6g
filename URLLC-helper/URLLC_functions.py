@@ -66,7 +66,7 @@ def calc_bus_and_cus(B: float, delta: float, gamma: np.ndarray[Any, dtype[float]
     return bus, cus
 
 
-def calc_K_prime_given_mu_star(mu_star: float, bus: np.ndarray[Any, dtype[float]],
+def calc_K_chernoff_given_mu_star(mu_star: float, bus: np.ndarray[Any, dtype[float]],
                                cus: np.ndarray[Any, dtype[float]], lambdas: np.ndarray[Any, dtype[int]],
                                derivative: bool) -> float:
     """
@@ -75,15 +75,16 @@ def calc_K_prime_given_mu_star(mu_star: float, bus: np.ndarray[Any, dtype[float]
     :param bus: Array of floats, where b[u] is the value of $$b_u$$
     :param cus: Array of floats, where c[u] is the value of $$c_u$$
     :param derivative: Boolean, whether to calculate the derivative
-    :return K_prime: Value of $$K'$$
-    :return dK_prime: Value of $$\frac{d\mu^*}{dK'}$$
+    :return K_chernoff: Value of $$K'$$
+    :return dK_chernoff: Value of $$\frac{d\mu^*}{dK'}$$
     """
     if derivative:
-        dK_prime = 4 * np.sum(lambdas * (cus ** 2) * np.exp(2 * mu_star * cus))
-        return dK_prime
+        dK_chernoff = 4 * np.sum(lambdas * (cus ** 2) * np.exp(2 * mu_star * cus))
+        return dK_chernoff
     else:
-        K_prime = 4 * np.sum(bus ** 2) + 2 * np.sum(lambdas * cus * np.exp(2 * mu_star * cus))
-        return K_prime
+        K_chernoff = 4 * np.sum(bus ** 2) + 2 * np.sum(lambdas * cus * np.exp(2 * mu_star * cus))
+        # K_chernoff = 4 * np.sum(bus ** 2) + 2 * np.sum(lambdas * cus * np.exp(2 * mu_star * cus)) + cus.shape[0]
+        return K_chernoff
 
 
 def substituted_inequality_43(mu: float, cus: np.ndarray[Any, dtype[float]],
@@ -97,6 +98,8 @@ def substituted_inequality_43(mu: float, cus: np.ndarray[Any, dtype[float]],
     """
     return (-2 * mu * np.dot(lambdas, cus * np.exp(2 * cus * mu)) + np.dot(lambdas, np.exp(2 * mu * cus))
             - np.sum(lambdas) - np.log(epsilon))
+    # return (-2 * mu * np.dot(lambdas, cus * np.exp(2 * cus * mu)) + np.dot(lambdas, np.exp(2 * mu * cus))
+    #         - np.sum(lambdas + mu) - np.log(epsilon))
 
 
 def solve_mu_star_given_epsilon(cus: np.ndarray[Any, dtype[float]], lambdas: np.ndarray[Any, dtype[int]],
@@ -110,30 +113,31 @@ def solve_mu_star_given_epsilon(cus: np.ndarray[Any, dtype[float]], lambdas: np.
     """
     num_users = cus.shape[0]
     func = lambda mu: substituted_inequality_43(mu, cus, lambdas, epsilon)
+    # derivative = lambda mu: -4 * mu * np.dot(lambdas, cus ** 2 * np.exp(2 * cus * mu))
     derivative = lambda mu: -4 * mu * np.dot(lambdas, cus ** 2 * np.exp(2 * cus * mu))
     mu = optimize.newton(func, 1 / np.max(cus), fprime=derivative)
     return mu
 
 
-def solve_mu_star(K_prime: float, bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[float]],
+def solve_mu_star(K_chernoff: float, bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[float]],
                   lambdas: np.ndarray[Any, dtype[int]]) -> float:
     """
     Solves the equation (41) where
         $$ K\' = 4 \sum_{u \in \mathcal{U} b_u^2 + 2 \sum_{u \in \mathcal{U} \lambda_u c_u e^{2 c_u \mu^*} $$
-    :param K_prime: Value of $$K'$$
+    :param K_chernoff: Value of $$K'$$
     :param bus: Array of floats, where bus[u] is the value of $$b_u$$
     :param cus: Array of floats, where cus[u] is the value of $$c_u$$
     :param lambdas: Array of integers, where lambdas[u] is the value of $$\lambda_u$$
 
     :return mu_star: Value of $$\mu^*$$ solved from the equation'
     """
-    func = lambda mu: calc_K_prime_given_mu_star(mu, bus, cus, lambdas, False) - K_prime
-    f_prime = lambda mu: calc_K_prime_given_mu_star(mu, bus, cus, lambdas, True)
-    mu_star = optimize.newton(func, 0.0, f_prime)
+    func = lambda mu: calc_K_chernoff_given_mu_star(mu, bus, cus, lambdas, False) - K_chernoff
+    f_chernoff = lambda mu: calc_K_chernoff_given_mu_star(mu, bus, cus, lambdas, True)
+    mu_star = optimize.newton(func, 0.0, f_chernoff)
     return mu_star
 
 
-def find_K_prime(lambdas: np.ndarray[Any, dtype[int]], bus: np.ndarray[Any, dtype[float]],
+def find_K_chernoff(lambdas: np.ndarray[Any, dtype[int]], bus: np.ndarray[Any, dtype[float]],
                  cus: np.ndarray[Any, dtype[float]], epsilon: float) -> int:
     """
     Finds the smallest integer of $$K'$$ such that the inequality (43) holds where
@@ -144,16 +148,17 @@ def find_K_prime(lambdas: np.ndarray[Any, dtype[int]], bus: np.ndarray[Any, dtyp
     :param cus: Array of floats, where cus[u] is the value of $$c_u$$
     :param epsilon: Value of $$\epsilon_\mathrm{puncture}$$
 
-    :return K_prime: the smallest integer of $$K'$$ such that the inequality (43) holds
+    :return K_chernoff: the smallest integer of $$K'$$ such that the inequality (43) holds
     """
     mu = solve_mu_star_given_epsilon(cus, lambdas, epsilon)
-    K_prime = calc_K_prime_given_mu_star(mu, bus, cus, lambdas, False)
-    # K_prime_solved = np.floor(K_prime).astype(int)
-    # mu_star = solve_mu_star(K_prime_solved, bus, cus, lambdas)
+    K_chernoff = calc_K_chernoff_given_mu_star(mu, bus, cus, lambdas, False) + cus.shape[0]
+    print(f"mu={mu}")
+    # K_chernoff_solved = np.floor(K_chernoff).astype(int)
+    # mu_star = solve_mu_star(K_chernoff_solved, bus, cus, lambdas)
     # if substituted_inequality_43(mu_star, cus, lambdas, epsilon) > 0:
-    #     K_prime_solved += 1
-    # return K_prime_solved
-    return -np.floor(-K_prime)
+    #     K_chernoff_solved += 1
+    # return K_chernoff_solved
+    return -np.floor(-K_chernoff)
 
 # TO IMPLEMENT 2024.08.30
 #     Gaussian Q-Function
@@ -197,15 +202,15 @@ def sample_data(bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[f
     """
     num_users = bus.shape[0]
     lambdas = np.random.poisson(mean_lambda, num_users)
-    K_prime = find_K_prime(lambdas, bus, cus, epsilon)
+    K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon)
     K_markov = markov_ineq_lower_bound(bus, cus, epsilon, lambdas)
-    return K_prime, K_markov
+    return K_chernoff, K_markov
 
 
 def plot_1(epsilon: float, num_users: int, B:float, delta:float,
            lambda_lower_bound: float, lambda_upper_bound: float, num_samples: int, scale_sinr: float = 1.0,
            with_latex: bool = True):
-    K_primes = np.array([])
+    K_chernoffs = np.array([])
     K_markovs = np.array([])
     gammas = np.random.rayleigh(scale=scale_sinr, size=num_users)
     bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon)
@@ -213,18 +218,18 @@ def plot_1(epsilon: float, num_users: int, B:float, delta:float,
     # print(f"cus: {cus}")
     mean_lambdas = np.linspace(lambda_lower_bound, lambda_upper_bound, num_samples)
     for mean_lambda in mean_lambdas:
-        K_prime, K_markov = sample_data(bus, cus, epsilon, mean_lambda)
-        K_primes = np.append(K_primes, K_prime)
+        K_chernoff, K_markov = sample_data(bus, cus, epsilon, mean_lambda)
+        K_chernoffs = np.append(K_chernoffs, K_chernoff)
         K_markovs = np.append(K_markovs, K_markov)
     if with_latex:
         plt.rcParams['text.usetex'] = True
-        plt.plot(mean_lambdas, K_primes, label=r"$K'$")
+        plt.plot(mean_lambdas, K_chernoffs, label=r"$K'$")
         plt.plot(mean_lambdas, K_markovs, label=r'$K_{min}$')
         plt.xlabel(r"$\bar{\lambda}$")
         plt.title(rf"$\epsilon = {epsilon}, \gamma \sim "r"\mathrm{Rayleigh}"f"({scale_sinr})"r"$")
     else:
         plt.rcParams['text.usetex'] = False
-        plt.plot(mean_lambdas, K_primes, label="K'")
+        plt.plot(mean_lambdas, K_chernoffs, label="K'")
         plt.plot(mean_lambdas, K_markovs, label='K_min')
         plt.xlabel("$lambda")
         plt.title(f"epsilon = {epsilon}, gamma: Rayleigh({scale_sinr})")
@@ -234,25 +239,25 @@ def plot_1(epsilon: float, num_users: int, B:float, delta:float,
 
 def plot_2(num_users: int, B:float, delta:float, mean_lambda:float, epsilon_lower_bound:float,
            epsilon_upper_bound:float, num_samples:int, scale_sinr: float = 1.0, with_latex: bool = True):
-    K_primes = np.array([])
+    K_chernoffs = np.array([])
     K_markovs = np.array([])
     gammas = np.random.rayleigh(scale=scale_sinr, size=num_users)
     epsilons = np.linspace(epsilon_lower_bound, epsilon_upper_bound, num_samples)
     for epsilon in epsilons:
         bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon)
-        K_prime, K_markov = sample_data(bus, cus, epsilon, mean_lambda)
-        K_primes = np.append(K_primes, K_prime)
+        K_chernoff, K_markov = sample_data(bus, cus, epsilon, mean_lambda)
+        K_chernoffs = np.append(K_chernoffs, K_chernoff)
         K_markovs = np.append(K_markovs, K_markov)
 
     if with_latex:
         plt.rcParams['text.usetex'] = True
-        plt.plot(epsilons, K_primes, label=r"$K'$")
+        plt.plot(epsilons, K_chernoffs, label=r"$K'$")
         plt.plot(epsilons, K_markovs, label=r'$K_{min}$')
         plt.xlabel(r"$\epsilon$")
         plt.title(r"$\bar{\lambda} = "f"{mean_lambda}"r", \gamma \sim \mathrm{Rayleigh}("f"{scale_sinr})$")
     else:
         plt.rcParams['text.usetex'] = False
-        plt.plot(epsilons, K_primes, label="K'")
+        plt.plot(epsilons, K_chernoffs, label="K'")
         plt.plot(epsilons, K_markovs, label='K_min')
         plt.xlabel("epsilon")
         plt.title("lambda = "f"{mean_lambda}"", gamma: Rayleigh("f"{scale_sinr})")
@@ -290,7 +295,7 @@ def calc_omegas(epsilon: float, gammas: np.ndarray[Any, dtype[float]],
     V = calc_V(gammas)
     term1 = sqrt(V) * inv_Q(epsilon)
     log_sinr = np.log(1 + gammas)
-    omegas = (term1 + sqrt(term1 ** 2 + 4 * log_sinr) * aus)  / (2 * sqrt(B * delta) * log_sinr)
+    omegas = (term1 + sqrt(term1 ** 2 + 4 * log_sinr * aus))  / (2 * sqrt(B * delta) * log_sinr)
     omegas = omegas ** 2
     return -np.floor(-omegas)  # takes the smallest integer larger than omegas
 
@@ -342,104 +347,107 @@ def generate_gammas(rus: np.ndarray[Any, dtype[float]],
     return gammas
 
 
-def generate_lambdas(mean_lambda: float, num_users: int) -> np.ndarray[Any, dtype[int]]:
+def generate_lambdas(mean_lambda: float, num_users: int) -> np.ndarray[Any, dtype[float]]:
     """
     Generate lambdas[u] given mean lambda and number of users following poisson distribution.
     :param mean_lambda: Mean lambda of poisson distribution
     :param num_users: Number of users.
     """
-    return np.random.poisson(mean_lambda, size=num_users)
+    # return np.random.poisson(mean_lambda, size=num_users)
+    lambdas = np.ones_like(num_users) * mean_lambda
+    return lambdas
 
 
 def monte_carlo_prob(num_samples: int, num_users: int, maximum_radius: float,
-                     B: float, delta: float, gamma_scale: float, mean_lambda: float, epsilon: float,
-                     stochastic_aus: bool = False) -> (int, int, int, int):
-    num_hit_prime = 0
+                     B: float, delta: float, gamma_scale: float, mean_lambda: float,
+                     epsilon_error: float, epsilon_puncture: float,
+                     stochastic_aus: bool = False) -> (int, int, int):
+    num_hit_chernoff = 0
     num_hit_markov = 0
-    num_error = 0
+    rus, thetas = generate_user_positions(num_users, maximum_radius, type="pole")
+    gammas = generate_gammas(rus, gamma_scale)
+    bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon_error)
+    lambdas = generate_lambdas(mean_lambda, num_users)
+    K_markov = markov_ineq_lower_bound(bus, cus, epsilon_puncture, lambdas)
+    K_real_sum = 0
+    try:
+        K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon_puncture)
+    except RuntimeError as e:
+        K_chernoff = 0
     for i in range(num_samples):
-        rus, thetas = generate_user_positions(num_users, maximum_radius, type="pole")
-        gammas = generate_gammas(rus, gamma_scale)
-        bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon)
-        lambdas = generate_lambdas(mean_lambda, num_users)
         aus = generate_aus(lambdas, stochastic_aus)
-        K_real = np.sum(calc_omegas(epsilon, gammas, aus, B, delta))
-        K_markov = markov_ineq_lower_bound(bus, cus, epsilon, lambdas)
-        try:
-            K_prime = find_K_prime(lambdas, bus, cus, epsilon)
-        except RuntimeError as e:
-            num_error += 1
-            K_prime = 0
-        else:
-            if K_real > K_prime:
-                num_hit_prime += 1
+        K_real = np.sum(calc_omegas(epsilon_error, gammas, aus, B, delta))
+        K_real_sum += K_real
+        if K_real > K_chernoff:
+            num_hit_chernoff += 1
         if K_real > K_markov:
             num_hit_markov += 1
         if (i+1) % 100 == 0:
-            print(f"num_hit_prime: {num_hit_prime}, num_hit_markov: {num_hit_markov}, num_error: {num_error}, total_num:{i+1}")
-            print(f"K_real:{K_real}, K_markov:{K_markov}, K_prime:{K_prime}")
-    return num_hit_prime, num_hit_markov, num_error, num_samples
+            print(f"num_hit_chernoff: {num_hit_chernoff}, num_hit_markov: {num_hit_markov}, total_num:{i+1}")
+            print(f"average K_real:{K_real_sum / (i + 1)}, K_markov:{K_markov}, K_chernoff:{K_chernoff}")
+    return num_hit_chernoff, num_hit_markov, num_samples
 
 
 if __name__ == '__main__':
-    num_users = 1000
-    bus = np.random.rand(num_users)
-    cus = np.random.rand(num_users)
-    lambdas = np.random.rand(num_users)
-    K_prime = np.random.randint(num_users) + np.floor( 4 * np.sum(bus ** 2)) + 1
-    mu_star = solve_mu_star(K_prime=K_prime, bus=bus, cus=cus, lambdas=lambdas)
-    # print(f"bus: {bus}, cus: {cus}")
-    print(f"K_prime: {K_prime}, lambdas: {lambdas}, mu_star: {mu_star}")
-    print(f"K_prime(mu_star):{calc_K_prime_given_mu_star(mu_star, bus, cus, lambdas, False)}")
-    epsilon = np.random.rand()
-    print(f"epsilon: {epsilon}")
-    # K_prime_1 = find_K_prime(lambdas=lambdas, bus=bus, cus=cus, epsilon=epsilon)  # Didn't work out!!!
-    # print(f"K_prime_1: {K_prime_1}")
-    K_prime_1 = find_K_prime(lambdas, bus, cus, epsilon)
-    mu_star_1 = solve_mu_star(K_prime_1, bus, cus, lambdas)
-    lefthand = substituted_inequality_43(mu_star_1, cus, lambdas, epsilon)
-    assert(lefthand <= 0)
-    print(f"lefthand: {lefthand}")
-    print(f"K_prime_1: {K_prime_1}")
-    K_prime_2 = K_prime_1 - 1
-    mu_star_2 = solve_mu_star(K_prime_2, bus, cus, lambdas)
-    lefthand = substituted_inequality_43(mu_star_2, cus, lambdas, epsilon)
-    assert(lefthand > 0)
-    print(f"lefthand: {lefthand}, K_prime_2: {K_prime_2}")
-    print("Test successful!")
-
-    B = 1
-    delta = 1e-3
-    epsilon = 1e-1
-    lambda_lower_bound = 1
-    lambda_upper_bound = 10
-    num_samples = 100
-    scale_sinr = 100
-    plot_1(epsilon, num_users, B, delta, lambda_lower_bound, lambda_upper_bound, num_samples, scale_sinr)
-    epsilon_lower_bound = 1e-3
-    epsilon_upper_bound = 1e-1
-    mean_lambda = 6
-    plot_2(num_users, B, delta, mean_lambda, epsilon_lower_bound, epsilon_upper_bound, num_samples, scale_sinr)
+    # num_users = 1000
+    # bus = np.random.rand(num_users)
+    # cus = np.random.rand(num_users)
+    # lambdas = np.random.rand(num_users)
+    # K_chernoff = np.random.randint(num_users) + np.floor( 4 * np.sum(bus ** 2)) + 1
+    # mu_star = solve_mu_star(K_chernoff=K_chernoff, bus=bus, cus=cus, lambdas=lambdas)
+    # # print(f"bus: {bus}, cus: {cus}")
+    # print(f"K_chernoff: {K_chernoff}, lambdas: {lambdas}, mu_star: {mu_star}")
+    # print(f"K_chernoff(mu_star):{calc_K_chernoff_given_mu_star(mu_star, bus, cus, lambdas, False)}")
+    # epsilon = np.random.rand()
+    # print(f"epsilon: {epsilon}")
+    # # K_chernoff_1 = find_K_chernoff(lambdas=lambdas, bus=bus, cus=cus, epsilon=epsilon)  # Didn't work out!!!
+    # # print(f"K_chernoff_1: {K_chernoff_1}")
+    # K_chernoff_1 = find_K_chernoff(lambdas, bus, cus, epsilon)
+    # mu_star_1 = solve_mu_star(K_chernoff_1, bus, cus, lambdas)
+    # lefthand = substituted_inequality_43(mu_star_1, cus, lambdas, epsilon)
+    # assert(lefthand <= 0)
+    # print(f"lefthand: {lefthand}")
+    # print(f"K_chernoff_1: {K_chernoff_1}")
+    # K_chernoff_2 = K_chernoff_1 - 1
+    # mu_star_2 = solve_mu_star(K_chernoff_2, bus, cus, lambdas)
+    # lefthand = substituted_inequality_43(mu_star_2, cus, lambdas, epsilon)
+    # assert(lefthand > 0)
+    # print(f"lefthand: {lefthand}, K_chernoff_2: {K_chernoff_2}")
+    # print("Test successful!")
+    #
+    # B = 1
+    # delta = 1e-3
+    # epsilon = 1e-1
+    # lambda_lower_bound = 1
+    # lambda_upper_bound = 10
+    # num_samples = 100
+    # scale_sinr = 100
+    # plot_1(epsilon, num_users, B, delta, lambda_lower_bound, lambda_upper_bound, num_samples, scale_sinr)
+    # epsilon_lower_bound = 1e-3
+    # epsilon_upper_bound = 1e-1
+    # mean_lambda = 6
+    # plot_2(num_users, B, delta, mean_lambda, epsilon_lower_bound, epsilon_upper_bound, num_samples, scale_sinr)
 
 
     num_users = 10000
     B = 1e15
     delta = .5e-3
-    epsilon = 1e-5
+    epsilon_puncture = 1e-5
+    epsilon_error = 1e-5
     lambda_lower_bound = 1
     lambda_upper_bound = 10
     mean_lambda = 100
     num_samples = 10000
     gamma_scale = 1
     maximum_radius = 1000
-    num_hit_prime, num_hit_markov, num_err, _ = monte_carlo_prob(num_samples, num_users,
+    num_hit_chernoff, num_hit_markov, _ = monte_carlo_prob(num_samples, num_users,
                                                                  maximum_radius, B, delta, gamma_scale,
-                                                                 mean_lambda, epsilon, True)
-    print(f"num_hit_prime: {num_hit_prime}, num_hit_markov: {num_hit_markov},"
-          f" num_err: {num_err}, num_samples: {num_samples}")
-    num_real_samples = num_samples - num_err
-    print(f"markov_prob:{num_hit_markov / num_real_samples}")
-    print(f"prime_prob:{num_hit_prime / num_real_samples}")
+                                                                 mean_lambda, epsilon_error, epsilon_puncture,
+                                                        True)
+    print(f"num_hit_chernoff: {num_hit_chernoff}, num_hit_markov: {num_hit_markov},"
+          f" num_samples: {num_samples}")
+    print(f"markov_prob:{num_hit_markov / num_samples}")
+    print(f"chernoff_prob:{num_hit_chernoff / num_samples}")
     # plot_1(epsilon, num_users, B, delta, lambda_lower_bound, lambda_upper_bound, num_samples, scale_sinr)
     # epsilon_lower_bound = 1e-3
     # epsilon_upper_bound = 1e-1
