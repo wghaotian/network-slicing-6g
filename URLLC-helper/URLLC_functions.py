@@ -152,7 +152,7 @@ def find_K_chernoff(lambdas: np.ndarray[Any, dtype[int]], bus: np.ndarray[Any, d
     """
     mu = solve_mu_star_given_epsilon(cus, lambdas, epsilon)
     K_chernoff = calc_K_chernoff_given_mu_star(mu, bus, cus, lambdas, False) + cus.shape[0]
-    print(f"mu={mu}")
+    # print(f"mu={mu}")
     # K_chernoff_solved = np.floor(K_chernoff).astype(int)
     # mu_star = solve_mu_star(K_chernoff_solved, bus, cus, lambdas)
     # if substituted_inequality_43(mu_star, cus, lambdas, epsilon) > 0:
@@ -354,7 +354,7 @@ def generate_lambdas(mean_lambda: float, num_users: int) -> np.ndarray[Any, dtyp
     :param num_users: Number of users.
     """
     # return np.random.poisson(mean_lambda, size=num_users)
-    lambdas = np.ones_like(num_users) * mean_lambda
+    lambdas = np.ones(num_users) * mean_lambda
     return lambdas
 
 
@@ -374,7 +374,7 @@ def monte_carlo_prob(num_samples: int, num_users: int, maximum_radius: float,
         K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon_puncture)
     except RuntimeError as e:
         K_chernoff = 0
-    for i in range(num_samples):
+    for i in range(int(num_samples/epsilon_puncture)):
         aus = generate_aus(lambdas, stochastic_aus)
         K_real = np.sum(calc_omegas(epsilon_error, gammas, aus, B, delta))
         K_real_sum += K_real
@@ -382,10 +382,130 @@ def monte_carlo_prob(num_samples: int, num_users: int, maximum_radius: float,
             num_hit_chernoff += 1
         if K_real > K_markov:
             num_hit_markov += 1
-        if (i+1) % 100 == 0:
-            print(f"num_hit_chernoff: {num_hit_chernoff}, num_hit_markov: {num_hit_markov}, total_num:{i+1}")
-            print(f"average K_real:{K_real_sum / (i + 1)}, K_markov:{K_markov}, K_chernoff:{K_chernoff}")
+        print_progress(i, num_samples, 15)
     return num_hit_chernoff, num_hit_markov, num_samples
+
+
+def monte_carlo_expectations(num_samples: int, rus: np.ndarray[Any, dtype[float]],
+                             B: float, delta: float, gammas: np.ndarray[Any, dtype[float]],
+                             bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[float]],
+                             lambdas: np.ndarray[Any, dtype[float]],
+                             epsilon_error: float, epsilon_puncture: float,
+                             stochastic_aus: bool = True) -> (float, float, float):
+    K_markov = markov_ineq_lower_bound(bus, cus, epsilon_puncture, lambdas)
+    K_real_sum = 0
+    try:
+        K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon_puncture)
+    except RuntimeError as e:
+        K_chernoff = 0
+    for i in range(num_samples):
+        aus = generate_aus(lambdas, stochastic_aus)
+        K_real = np.sum(calc_omegas(epsilon_error, gammas, aus, B, delta))
+        K_real_sum += K_real
+        # if (i+1) % 100 == 0:
+        #     print(f"average K_real:{K_real_sum / (i + 1)}, K_markov:{K_markov}, K_chernoff:{K_chernoff}")
+    return K_real_sum / num_samples, K_chernoff, K_markov
+
+
+def monte_carlo_limits(num_samples: int, rus: np.ndarray[Any, dtype[float]],
+                             B: float, delta: float, gammas: np.ndarray[Any, dtype[float]],
+                             bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[float]],
+                             lambdas: np.ndarray[Any, dtype[float]],
+                             epsilon_error: float, epsilon_puncture: float,
+                             stochastic_aus: bool = True) -> (float, float, float):
+    # takeFirstEpsilon
+    K_markov = markov_ineq_lower_bound(bus, cus, epsilon_puncture, lambdas)
+    K_real_sum = 0
+    try:
+        K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon_puncture)
+    except RuntimeError as e:
+        K_chernoff = 0
+    for i in range(num_samples):
+        aus = generate_aus(lambdas, stochastic_aus)
+        K_real = np.sum(calc_omegas(epsilon_error, gammas, aus, B, delta))
+        K_real_sum += K_real
+        # if (i+1) % 100 == 0:
+        #     print(f"average K_real:{K_real_sum / (i + 1)}, K_markov:{K_markov}, K_chernoff:{K_chernoff}")
+    return K_real_sum / num_samples, K_chernoff, K_markov
+
+
+def print_progress(cur_step: int, total_step: int, progress_num: int, bar_size: int = 20):
+    big_step_size = int(total_step / progress_num)
+    if cur_step % big_step_size == 0:
+        progress = int(cur_step / total_step * bar_size)
+        print(f"Current Progress {'=' * progress + '.' * (bar_size - progress)} {cur_step}/{total_step}")
+
+
+def plot_k_expectations_lambda(num_samples: int, num_users: int, num_plot_samples: int, maximum_radius: float,
+                               B: float, delta: float, gamma_scale: float, lambda_min: float, lambda_max: float,
+                               epsilon_error: float, epsilon_puncture: float,
+                               stochastic_aus: bool = False, with_latex: bool = True, filename="K_expectations_lambda.png"):
+    rus, thetas = generate_user_positions(num_users, maximum_radius, type="pole")
+    gammas = generate_gammas(rus, gamma_scale)
+    bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon_error)
+    mean_lambdas = np.linspace(lambda_min, lambda_max, num_plot_samples)
+    K_reals, K_chernoffs, K_markovs = [], [], []
+    for i, mean_lambda in enumerate(mean_lambdas):
+        lambdas = generate_lambdas(mean_lambda, num_users)
+        K_real, K_chernoff, K_markov = monte_carlo_expectations(num_samples, rus, B, delta, gammas, bus, cus, lambdas,
+                                                                epsilon_error, epsilon_puncture, stochastic_aus)
+        K_reals.append(K_real)
+        K_chernoffs.append(K_chernoff)
+        K_markovs.append(K_markov)
+        print_progress(i, num_plot_samples, 15)
+    if with_latex:
+        plt.rcParams['text.usetex'] = True
+        plt.plot(mean_lambdas, K_chernoffs, label=r"$K_\mathrm{chernoff}$")
+        # plt.plot(mean_lambdas, K_markovs, label=r'$K_\mathrm{markov}$')
+        plt.plot(mean_lambdas, K_reals, label=r"$K_\mathrm{puncture}$")
+        plt.xlabel(r"$\bar{\lambda}$")
+        plt.title(r"${\epsilon_\mathrm{puncture}} = "f"{epsilon_puncture}"r"$")
+    else:
+        plt.rcParams['text.usetex'] = False
+        plt.plot(mean_lambdas, K_chernoffs, label="K_chernoff")
+        plt.plot(mean_lambdas, K_reals, label="K_puncture")
+        plt.xlabel("mean_lambda")
+        plt.title("epsilon_puncture = "f"{epsilon_puncture}")
+    plt.legend()
+    plt.savefig(filename)
+    plt.close()
+
+
+def plot_k_expectations_epsilon(num_samples: int, num_users: int, num_plot_samples: int, maximum_radius: float,
+                               B: float, delta: float, gamma_scale: float, mean_lambda: float,
+                               epsilon_error: float, epsilon_puncture_min: int, epsilon_puncture_max: int,
+                               stochastic_aus: bool = False, with_latex: bool = True, filename="K_expectations_epsilon.png"):
+    rus, thetas = generate_user_positions(num_users, maximum_radius, type="pole")
+    gammas = generate_gammas(rus, gamma_scale)
+    bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon_error)
+    epsilons = np.logspace(epsilon_puncture_min, epsilon_puncture_max, num_plot_samples)
+    lambdas = generate_lambdas(mean_lambda, num_users)
+    K_reals, K_chernoffs, K_markovs = [], [], []
+    for i, epsilon_puncture in enumerate(epsilons):
+        K_real, K_chernoff, K_markov = monte_carlo_expectations(num_samples, rus, B, delta, gammas, bus, cus, lambdas,
+                                                                epsilon_error, epsilon_puncture, stochastic_aus)
+        K_reals.append(K_real)
+        K_chernoffs.append(K_chernoff)
+        K_markovs.append(K_markov)
+        print_progress(i, num_plot_samples, 15)
+    if with_latex:
+        plt.rcParams['text.usetex'] = True
+        plt.plot(epsilons, K_chernoffs, label=r"$K_\mathrm{chernoff}$")
+        plt.plot(epsilons, K_reals, label=r'$K_\mathrm{puncture}$')
+        plt.xlabel(r"$\epsilon$")
+        plt.title(r"$\bar{\lambda} = "f"{mean_lambda}"r")$")
+    else:
+        plt.rcParams['text.usetex'] = False
+        plt.plot(epsilons, K_chernoffs, label="K_chernoff")
+        plt.plot(epsilons, K_reals, label='K_puncture')
+        plt.xlabel("epsilon")
+        plt.title("mean_lambda = "f"{mean_lambda}")
+    plt.xscale("log")
+    plt.legend()
+    plt.savefig(filename)
+    plt.close()
+
+
 
 
 if __name__ == '__main__':
@@ -429,15 +549,15 @@ if __name__ == '__main__':
     # plot_2(num_users, B, delta, mean_lambda, epsilon_lower_bound, epsilon_upper_bound, num_samples, scale_sinr)
 
 
-    num_users = 10000
+    num_users = 1000
     B = 1e15
     delta = .5e-3
-    epsilon_puncture = 1e-5
+    epsilon_puncture = 1e-2
     epsilon_error = 1e-5
     lambda_lower_bound = 1
     lambda_upper_bound = 10
     mean_lambda = 100
-    num_samples = 10000
+    num_samples = 100
     gamma_scale = 1
     maximum_radius = 1000
     num_hit_chernoff, num_hit_markov, _ = monte_carlo_prob(num_samples, num_users,
@@ -448,8 +568,17 @@ if __name__ == '__main__':
           f" num_samples: {num_samples}")
     print(f"markov_prob:{num_hit_markov / num_samples}")
     print(f"chernoff_prob:{num_hit_chernoff / num_samples}")
-    # plot_1(epsilon, num_users, B, delta, lambda_lower_bound, lambda_upper_bound, num_samples, scale_sinr)
+    plot_1(epsilon_puncture, num_users, B, delta, lambda_lower_bound, lambda_upper_bound, num_samples)
     # epsilon_lower_bound = 1e-3
     # epsilon_upper_bound = 1e-1
     # mean_lambda = 6
     # plot_2(num_users, B, delta, mean_lambda, epsilon_lower_bound, epsilon_upper_bound, num_samples, scale_sinr)
+    epsilon_puncture_min = -5
+    epsilon_puncture_max = -1
+    num_plot_samples = 1000
+    # plot_k_expectations_lambda(num_samples, num_users, num_plot_samples, maximum_radius, B, delta,
+    #                            gamma_scale, lambda_lower_bound, lambda_upper_bound, epsilon_error, epsilon_puncture, stochastic_aus=True,
+    #                            with_latex=True)
+    # plot_k_expectations_epsilon(num_samples, num_users, num_plot_samples, maximum_radius, B, delta,
+    #                             gamma_scale, mean_lambda, epsilon_error, epsilon_puncture_min, epsilon_puncture_max,
+    #                             stochastic_aus=True, with_latex=True)
