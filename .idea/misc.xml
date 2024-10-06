@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Black">
-    <option name="sdkName" value="INDA_network_slicing" />
+    <option name="sdkName" value="network-slicing-6g" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="INDA_network_slicing" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="network-slicing-6g" project-jdk-type="Python SDK" />
 </project>
