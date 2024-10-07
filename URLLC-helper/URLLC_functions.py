@@ -416,7 +416,7 @@ def monte_carlo_bounds(num_samples: int, rus: np.ndarray[Any, dtype[float]],
                              stochastic_aus: bool = True) -> (float, float, float):
     K_markov = markov_ineq_lower_bound(bus, cus, epsilon_puncture, lambdas)
     num_iterations = (np.floor(num_samples / epsilon_puncture)).astype(int)
-    ranked_index = -np.floor(-num_iterations * (1 - epsilon_puncture)).astype(int)
+    ranked_index = -np.floor(-num_iterations * (epsilon_puncture)).astype(int)
     K_reals = PriorityQueue(ranked_index)
     try:
         K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon_puncture)
@@ -435,17 +435,22 @@ def monte_carlo_bounds(num_samples: int, rus: np.ndarray[Any, dtype[float]],
             else:
                 K_reals.put(cur_min_K_reals)
         if not flag:
-            print(f"current epsilon_puncture = {epsilon_puncture}")
+            print(f"current epsilon_puncture = {epsilon_puncture}, lambda mean = {np.mean(lambdas)}")
             flag = True
         print_progress(i, num_iterations, 100)
     return K_reals.get(), K_chernoff, K_markov
 
 
-def print_progress(cur_step: int, total_step: int, progress_num: int, bar_size: int = 20):
-    big_step_size = int(total_step / progress_num)
-    if cur_step % big_step_size == 0:
+def print_progress(cur_step: int, total_step: int, progress_num: int, bar_size: int = 20, finished_char: str = '=',
+                   unfinished_char: str = '.') -> bool:
+    big_step_size = int(-np.floor(-total_step / progress_num))
+    if cur_step % big_step_size == 0 and cur_step:
         progress = int(cur_step / total_step * bar_size)
-        print(f"Current Progress {'=' * progress + '.' * (bar_size - progress)} {cur_step}/{total_step}")
+        print(f"Current Progress {finished_char * progress + unfinished_char * (bar_size - progress)}"
+              f" {cur_step}/{total_step}")
+        return True
+    else:
+        return False
 
 
 def plot_k_bounds_lambda(num_samples: int, num_users: int, num_plot_samples: int, maximum_radius: float,
@@ -464,23 +469,23 @@ def plot_k_bounds_lambda(num_samples: int, num_users: int, num_plot_samples: int
         K_reals.append(K_real)
         K_chernoffs.append(K_chernoff)
         K_markovs.append(K_markov)
-        print_progress(i, num_plot_samples, 15)
-    if with_latex:
-        plt.rcParams['text.usetex'] = True
-        plt.plot(mean_lambdas, K_chernoffs, label=r"$K_\mathrm{chernoff}$")
-        # plt.plot(mean_lambdas, K_markovs, label=r'$K_\mathrm{markov}$')
-        plt.plot(mean_lambdas, K_reals, label=r"$K_\mathrm{puncture}$")
-        plt.xlabel(r"$\bar{\lambda}$")
-        plt.title(r"${\epsilon_\mathrm{puncture}} = "f"{epsilon_puncture}"r"$")
-    else:
-        plt.rcParams['text.usetex'] = False
-        plt.plot(mean_lambdas, K_chernoffs, label="K_chernoff")
-        plt.plot(mean_lambdas, K_reals, label="K_puncture")
-        plt.xlabel("mean_lambda")
-        plt.title("epsilon_puncture = "f"{epsilon_puncture}")
-    plt.legend()
-    plt.savefig(filename)
-    plt.close()
+        if print_progress(i, num_plot_samples, 15, finished_char="#", unfinished_char="*"):
+            if with_latex:
+                plt.rcParams['text.usetex'] = True
+                plt.plot(mean_lambdas[0 : i + 1], K_chernoffs, label=r"$K_\mathrm{chernoff}$")
+                # plt.plot(mean_lambdas, K_markovs, label=r'$K_\mathrm{markov}$')
+                plt.plot(mean_lambdas[0 : i + 1], K_reals, label=r"$K_\mathrm{puncture}$")
+                plt.xlabel(r"$\bar{\lambda}$")
+                plt.title(r"${\epsilon_\mathrm{puncture}} = "f"{epsilon_puncture}"r"$")
+            else:
+                plt.rcParams['text.usetex'] = False
+                plt.plot(mean_lambdas[0 : i + 1], K_chernoffs, label="K_chernoff")
+                plt.plot(mean_lambdas[0 : i + 1], K_reals, label="K_puncture")
+                plt.xlabel("mean_lambda")
+                plt.title("epsilon_puncture = "f"{epsilon_puncture}")
+            plt.legend()
+            plt.savefig(filename)
+            plt.close()
 
 
 def plot_k_bounds_epsilon(num_samples: int, num_users: int, num_plot_samples: int, maximum_radius: float,
@@ -499,23 +504,23 @@ def plot_k_bounds_epsilon(num_samples: int, num_users: int, num_plot_samples: in
         K_reals.append(K_real)
         K_chernoffs.append(K_chernoff)
         K_markovs.append(K_markov)
-        print_progress(i, num_plot_samples, 15)
-    if with_latex:
-        plt.rcParams['text.usetex'] = True
-        plt.plot(epsilons, K_chernoffs, label=r"$K_\mathrm{chernoff}$")
-        plt.plot(epsilons, K_reals, label=r'$K_\mathrm{puncture}$')
-        plt.xlabel(r"$\epsilon$")
-        plt.title(r"$\bar{\lambda} = "f"{mean_lambda}"r")$")
-    else:
-        plt.rcParams['text.usetex'] = False
-        plt.plot(epsilons, K_chernoffs, label="K_chernoff")
-        plt.plot(epsilons, K_reals, label='K_puncture')
-        plt.xlabel("epsilon")
-        plt.title("mean_lambda = "f"{mean_lambda}")
-    plt.xscale("log")
-    plt.legend()
-    plt.savefig(filename)
-    plt.close()
+        if print_progress(i, num_plot_samples, 20, finished_char='#', unfinished_char='*'):
+            if with_latex:
+                plt.rcParams['text.usetex'] = True
+                plt.plot(epsilons[0 : i + 1], K_chernoffs, label=r"$K_\mathrm{chernoff}$")
+                plt.plot(epsilons[0 : i + 1], K_reals, label=r'$K_\mathrm{puncture}$')
+                plt.xlabel(r"$\epsilon$")
+                plt.title(r"$\bar{\lambda} = "f"{mean_lambda}"r")$")
+            else:
+                plt.rcParams['text.usetex'] = False
+                plt.plot(epsilons[0 : i + 1], K_chernoffs, label="K_chernoff")
+                plt.plot(epsilons[0 : i + 1], K_reals, label='K_puncture')
+                plt.xlabel("epsilon")
+                plt.title("mean_lambda = "f"{mean_lambda}")
+            plt.xscale("log")
+            plt.legend()
+            plt.savefig(filename)
+            plt.close()
 
 
 
@@ -569,7 +574,7 @@ if __name__ == '__main__':
     lambda_lower_bound = 1
     lambda_upper_bound = 10
     mean_lambda = 100
-    num_samples = 1000
+    num_samples = 100
     gamma_scale = 1
     maximum_radius = 1000
     # num_hit_chernoff, num_hit_markov, _ = monte_carlo_prob(num_samples, num_users,
@@ -583,7 +588,7 @@ if __name__ == '__main__':
 
     epsilon_puncture_min = -3
     epsilon_puncture_max = -1
-    num_plot_samples = 1000
+    num_plot_samples = 100
     plot_k_bounds_epsilon(num_samples, num_users, num_plot_samples, maximum_radius, B, delta,
                                 gamma_scale, mean_lambda, epsilon_error, epsilon_puncture_min, epsilon_puncture_max,
                                 stochastic_aus=True, with_latex=True)
