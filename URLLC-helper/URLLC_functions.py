@@ -573,7 +573,7 @@ if __name__ == '__main__':
     epsilon_error = 1e-5
     lambda_lower_bound = 1
     lambda_upper_bound = 10
-    mean_lambda = 100
+    mean_lambda = 6
     num_samples = 100
     gamma_scale = 1
     maximum_radius = 1000
