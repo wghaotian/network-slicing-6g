@@ -5,6 +5,8 @@ from numpy import sqrt, dtype
 from scipy import optimize, special
 import matplotlib.pyplot as plt
 from queue import PriorityQueue
+import pickle
+from datetime import datetime
 
 
 def inv_Q(x: float) -> float:
@@ -31,7 +33,7 @@ def dB2power(dB: np.ndarray[Any, dtype[float]]) -> np.ndarray[Any, dtype[float]]
     return np.power(10, dB / 10)
 
 
-def calc_pathloss(distance: np.ndarray[Any, dtype[float]], freqency: float=2400) \
+def calc_pathloss(distance: np.ndarray[Any, dtype[float]], freqency: float = 2400) \
         -> np.ndarray[Any, dtype[float]]:
     """
     Calculate path loss given distance and frequency
@@ -45,7 +47,7 @@ def calc_pathloss(distance: np.ndarray[Any, dtype[float]], freqency: float=2400)
 
 
 def calc_bus_and_cus(B: float, delta: float, gamma: np.ndarray[Any, dtype[float]], epsilon: float,
-                     kus: np.ndarray[Any, dtype[int]]|None = None) -> \
+                     kus: np.ndarray[Any, dtype[int]] | None = None) -> \
         (np.ndarray[Any, dtype[float]], np.ndarray[Any, dtype[float]]):
     """
     Calculates the b value for the given $$V, B, \delta, \gamma and Q^{-1}(\epsilon)$$
@@ -68,8 +70,8 @@ def calc_bus_and_cus(B: float, delta: float, gamma: np.ndarray[Any, dtype[float]
 
 
 def calc_K_chernoff_given_mu_star(mu_star: float, bus: np.ndarray[Any, dtype[float]],
-                               cus: np.ndarray[Any, dtype[float]], lambdas: np.ndarray[Any, dtype[float]],
-                               derivative: bool) -> float:
+                                  cus: np.ndarray[Any, dtype[float]], lambdas: np.ndarray[Any, dtype[float]],
+                                  derivative: bool) -> float:
     """
     Calculates the $$K'$$ for the given $$\mu^*$$
     :param mu_star: Value of the $$\mu^*$$
@@ -139,7 +141,7 @@ def solve_mu_star(K_chernoff: float, bus: np.ndarray[Any, dtype[float]], cus: np
 
 
 def find_K_chernoff(lambdas: np.ndarray[Any, dtype[float]], bus: np.ndarray[Any, dtype[float]],
-                 cus: np.ndarray[Any, dtype[float]], epsilon: float) -> int:
+                    cus: np.ndarray[Any, dtype[float]], epsilon: float) -> int:
     """
     Finds the smallest integer of $$K'$$ such that the inequality (43) holds where
         $$\exp(-\mu^* K' - \sum_{u \in \mathcal{U}} \lambda_u + 4 \mu^* \sum_{u \in \mathcal{U}} b_u^2 +
@@ -160,6 +162,7 @@ def find_K_chernoff(lambdas: np.ndarray[Any, dtype[float]], bus: np.ndarray[Any,
     #     K_chernoff_solved += 1
     # return K_chernoff_solved
     return -np.floor(-K_chernoff)
+
 
 # TO IMPLEMENT 2024.08.30
 #     Gaussian Q-Function
@@ -208,7 +211,7 @@ def sample_data(bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[f
     return K_chernoff, K_markov
 
 
-def plot_1(epsilon: float, num_users: int, B:float, delta:float,
+def plot_1(epsilon: float, num_users: int, B: float, delta: float,
            lambda_lower_bound: float, lambda_upper_bound: float, num_samples: int, scale_sinr: float = 1.0,
            with_latex: bool = True):
     K_chernoffs = np.array([])
@@ -238,8 +241,8 @@ def plot_1(epsilon: float, num_users: int, B:float, delta:float,
     plt.show()
 
 
-def plot_2(num_users: int, B:float, delta:float, mean_lambda:float, epsilon_lower_bound:float,
-           epsilon_upper_bound:float, num_samples:int, scale_sinr: float = 1.0, with_latex: bool = True):
+def plot_2(num_users: int, B: float, delta: float, mean_lambda: float, epsilon_lower_bound: float,
+           epsilon_upper_bound: float, num_samples: int, scale_sinr: float = 1.0, with_latex: bool = True):
     K_chernoffs = np.array([])
     K_markovs = np.array([])
     gammas = np.random.rayleigh(scale=scale_sinr, size=num_users)
@@ -296,7 +299,7 @@ def calc_omegas(epsilon: float, gammas: np.ndarray[Any, dtype[float]],
     V = calc_V(gammas)
     term1 = sqrt(V) * inv_Q(epsilon)
     log_sinr = np.log(1 + gammas)
-    omegas = (term1 + sqrt(term1 ** 2 + 4 * log_sinr * aus))  / (2 * sqrt(B * delta) * log_sinr)
+    omegas = (term1 + sqrt(term1 ** 2 + 4 * log_sinr * aus)) / (2 * sqrt(B * delta) * log_sinr)
     omegas = omegas ** 2
     return -np.floor(-omegas)  # takes the smallest integer larger than omegas
 
@@ -314,8 +317,8 @@ def cart2pole(xs: np.ndarray[Any, dtype[float]],
 
 
 def generate_user_positions(num_users: int,
-                            maximum_radius: float, type: str="pole") -> (np.ndarray[Any, dtype[float]],
-                                                                         np.ndarray[Any, dtype[float]]):
+                            maximum_radius: float, type: str = "pole") -> (np.ndarray[Any, dtype[float]],
+                                                                           np.ndarray[Any, dtype[float]]):
     """
     Generate user positions given number of users. Positions are uniformly distributed within maximum_radius.
     It is assumed that the only basestation lies at the original.
@@ -375,7 +378,7 @@ def monte_carlo_prob(num_samples: int, num_users: int, maximum_radius: float,
         K_chernoff = find_K_chernoff(lambdas, bus, cus, epsilon_puncture)
     except RuntimeError as e:
         K_chernoff = 0
-    for i in range(int(num_samples/epsilon_puncture)):
+    for i in range(int(num_samples / epsilon_puncture)):
         aus = generate_aus(lambdas, stochastic_aus)
         K_real = np.sum(calc_omegas(epsilon_error, gammas, aus, B, delta))
         K_real_sum += K_real
@@ -383,7 +386,7 @@ def monte_carlo_prob(num_samples: int, num_users: int, maximum_radius: float,
             num_hit_chernoff += 1
         if K_real > K_markov:
             num_hit_markov += 1
-        print_progress(i, int(num_samples/epsilon_puncture), 15)
+        print_progress(i, int(num_samples / epsilon_puncture), 15)
     return num_hit_chernoff, num_hit_markov, num_samples
 
 
@@ -409,11 +412,11 @@ def monte_carlo_expectations(num_samples: int, rus: np.ndarray[Any, dtype[float]
 
 
 def monte_carlo_bounds(num_samples: int, rus: np.ndarray[Any, dtype[float]],
-                             B: float, delta: float, gammas: np.ndarray[Any, dtype[float]],
-                             bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[float]],
-                             lambdas: np.ndarray[Any, dtype[float]],
-                             epsilon_error: float, epsilon_puncture: float,
-                             stochastic_aus: bool = True) -> (float, float, float):
+                       B: float, delta: float, gammas: np.ndarray[Any, dtype[float]],
+                       bus: np.ndarray[Any, dtype[float]], cus: np.ndarray[Any, dtype[float]],
+                       lambdas: np.ndarray[Any, dtype[float]],
+                       epsilon_error: float, epsilon_puncture: float,
+                       stochastic_aus: bool = True) -> (float, float, float):
     K_markov = markov_ineq_lower_bound(bus, cus, epsilon_puncture, lambdas)
     num_iterations = (np.floor(num_samples / epsilon_puncture)).astype(int)
     ranked_index = -np.floor(-num_iterations * (epsilon_puncture)).astype(int)
@@ -437,7 +440,7 @@ def monte_carlo_bounds(num_samples: int, rus: np.ndarray[Any, dtype[float]],
         if not flag:
             print(f"current epsilon_puncture = {epsilon_puncture}, lambda mean = {np.mean(lambdas)}")
             flag = True
-        print_progress(i, num_iterations, 100)
+        print_progress(i, num_iterations, 20)
     return K_reals.get(), K_chernoff, K_markov
 
 
@@ -454,9 +457,9 @@ def print_progress(cur_step: int, total_step: int, progress_num: int, bar_size: 
 
 
 def plot_k_bounds_lambda(num_samples: int, num_users: int, num_plot_samples: int, maximum_radius: float,
-                               B: float, delta: float, gamma_scale: float, lambda_min: float, lambda_max: float,
-                               epsilon_error: float, epsilon_puncture: float,
-                               stochastic_aus: bool = False, with_latex: bool = True, filename="K_bounds_lambda.png"):
+                         B: float, delta: float, gamma_scale: float, lambda_min: float, lambda_max: float,
+                         epsilon_error: float, epsilon_puncture: float, timestamp: str,
+                         stochastic_aus: bool = False, with_latex: bool = True, filename="K_bounds_lambda"):
     rus, thetas = generate_user_positions(num_users, maximum_radius, type="pole")
     gammas = generate_gammas(rus, gamma_scale)
     bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon_error)
@@ -465,33 +468,35 @@ def plot_k_bounds_lambda(num_samples: int, num_users: int, num_plot_samples: int
     for i, mean_lambda in enumerate(mean_lambdas):
         lambdas = generate_lambdas(mean_lambda, num_users)
         K_real, K_chernoff, K_markov = monte_carlo_bounds(num_samples, rus, B, delta, gammas, bus, cus, lambdas,
-                                                                epsilon_error, epsilon_puncture, stochastic_aus)
+                                                          epsilon_error, epsilon_puncture, stochastic_aus)
         K_reals.append(K_real)
         K_chernoffs.append(K_chernoff)
         K_markovs.append(K_markov)
         if print_progress(i, num_plot_samples, 15, finished_char="#", unfinished_char="*"):
             if with_latex:
                 plt.rcParams['text.usetex'] = True
-                plt.plot(mean_lambdas[0 : i + 1], K_chernoffs, label=r"$K_\mathrm{chernoff}$")
+                plt.plot(mean_lambdas[0: i + 1], K_chernoffs, label=r"$K_\mathrm{chernoff}$")
                 # plt.plot(mean_lambdas, K_markovs, label=r'$K_\mathrm{markov}$')
-                plt.plot(mean_lambdas[0 : i + 1], K_reals, label=r"$K_\mathrm{puncture}$")
+                plt.plot(mean_lambdas[0: i + 1], K_reals, label=r"$K_\mathrm{puncture}$")
                 plt.xlabel(r"$\bar{\lambda}$")
                 plt.title(r"${\epsilon_\mathrm{puncture}} = "f"{epsilon_puncture}"r"$")
             else:
                 plt.rcParams['text.usetex'] = False
-                plt.plot(mean_lambdas[0 : i + 1], K_chernoffs, label="K_chernoff")
-                plt.plot(mean_lambdas[0 : i + 1], K_reals, label="K_puncture")
+                plt.plot(mean_lambdas[0: i + 1], K_chernoffs, label="K_chernoff")
+                plt.plot(mean_lambdas[0: i + 1], K_reals, label="K_puncture")
                 plt.xlabel("mean_lambda")
                 plt.title("epsilon_puncture = "f"{epsilon_puncture}")
             plt.legend()
-            plt.savefig(filename)
+            plt.savefig(f"{filename}_{timestamp}.png")
             plt.close()
+            with open(f"{filename}_{timestamp}.pkl", "wb") as file:
+                pickle.dump((mean_lambdas, K_chernoffs, K_reals, K_markovs), file)
 
 
 def plot_k_bounds_epsilon(num_samples: int, num_users: int, num_plot_samples: int, maximum_radius: float,
-                               B: float, delta: float, gamma_scale: float, mean_lambda: float,
-                               epsilon_error: float, epsilon_puncture_min: int, epsilon_puncture_max: int,
-                               stochastic_aus: bool = False, with_latex: bool = True, filename="K_bounds_epsilon.png"):
+                          B: float, delta: float, gamma_scale: float, mean_lambda: float,
+                          epsilon_error: float, epsilon_puncture_min: int, epsilon_puncture_max: int, timestamp: str,
+                          stochastic_aus: bool = False, with_latex: bool = True, filename: str = "K_bounds_epsilon"):
     rus, thetas = generate_user_positions(num_users, maximum_radius, type="pole")
     gammas = generate_gammas(rus, gamma_scale)
     bus, cus = calc_bus_and_cus(B, delta, gammas, epsilon_error)
@@ -500,29 +505,29 @@ def plot_k_bounds_epsilon(num_samples: int, num_users: int, num_plot_samples: in
     K_reals, K_chernoffs, K_markovs = [], [], []
     for i, epsilon_puncture in enumerate(epsilons):
         K_real, K_chernoff, K_markov = monte_carlo_bounds(num_samples, rus, B, delta, gammas, bus, cus, lambdas,
-                                                                epsilon_error, epsilon_puncture, stochastic_aus)
+                                                          epsilon_error, epsilon_puncture, stochastic_aus)
         K_reals.append(K_real)
         K_chernoffs.append(K_chernoff)
         K_markovs.append(K_markov)
         if print_progress(i, num_plot_samples, 20, finished_char='#', unfinished_char='*'):
             if with_latex:
                 plt.rcParams['text.usetex'] = True
-                plt.plot(epsilons[0 : i + 1], K_chernoffs, label=r"$K_\mathrm{chernoff}$")
-                plt.plot(epsilons[0 : i + 1], K_reals, label=r'$K_\mathrm{puncture}$')
+                plt.plot(epsilons[0: i + 1], K_chernoffs, label=r"$K_\mathrm{chernoff}$")
+                plt.plot(epsilons[0: i + 1], K_reals, label=r'$K_\mathrm{puncture}$')
                 plt.xlabel(r"$\epsilon$")
                 plt.title(r"$\bar{\lambda} = "f"{mean_lambda}"r")$")
             else:
                 plt.rcParams['text.usetex'] = False
-                plt.plot(epsilons[0 : i + 1], K_chernoffs, label="K_chernoff")
-                plt.plot(epsilons[0 : i + 1], K_reals, label='K_puncture')
+                plt.plot(epsilons[0: i + 1], K_chernoffs, label="K_chernoff")
+                plt.plot(epsilons[0: i + 1], K_reals, label='K_puncture')
                 plt.xlabel("epsilon")
                 plt.title("mean_lambda = "f"{mean_lambda}")
             plt.xscale("log")
             plt.legend()
-            plt.savefig(filename)
+            plt.savefig(f"{filename}_{timestamp}.png")
             plt.close()
-
-
+            with open(f"{filename}_{timestamp}.pkl", 'wb') as file:
+                pickle.dump((epsilons, K_chernoffs, K_reals, K_markovs), file)
 
 
 if __name__ == '__main__':
@@ -565,14 +570,13 @@ if __name__ == '__main__':
     # mean_lambda = 6
     # plot_2(num_users, B, delta, mean_lambda, epsilon_lower_bound, epsilon_upper_bound, num_samples, scale_sinr)
 
-
     num_users = 1000
     B = 1e15
     delta = .5e-3
     epsilon_puncture = 1e-2
     epsilon_error = 1e-5
-    lambda_lower_bound = 1
-    lambda_upper_bound = 10
+    lambda_lower_bound = 1e-3
+    lambda_upper_bound = 3+1e-3
     mean_lambda = 6
     num_samples = 100
     gamma_scale = 1
@@ -589,9 +593,15 @@ if __name__ == '__main__':
     epsilon_puncture_min = -3
     epsilon_puncture_max = -1
     num_plot_samples = 100
-    plot_k_bounds_epsilon(num_samples, num_users, num_plot_samples, maximum_radius, B, delta,
-                                gamma_scale, mean_lambda, epsilon_error, epsilon_puncture_min, epsilon_puncture_max,
-                                stochastic_aus=True, with_latex=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    # plot_k_bounds_epsilon(num_samples, num_users, num_plot_samples, maximum_radius, B, delta,
+    #                       gamma_scale, mean_lambda, epsilon_error, epsilon_puncture_min, epsilon_puncture_max,
+    #                       timestamp=timestamp, stochastic_aus=True, with_latex=True)
     plot_k_bounds_lambda(num_samples, num_users, num_plot_samples, maximum_radius, B, delta,
-                               gamma_scale, lambda_lower_bound, lambda_upper_bound, epsilon_error, epsilon_puncture, stochastic_aus=True,
-                               with_latex=True)
+                         gamma_scale, lambda_lower_bound, lambda_upper_bound, epsilon_error, epsilon_puncture,
+                         timestamp=timestamp, stochastic_aus=True,
+                         with_latex=True)
+
+    # To Do 10.07:
+    #   Save data as pkl
+    #   Calculate linear regression to check if it has some linear relationship
