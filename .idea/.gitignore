@@ -6,3 +6,9 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+/misc.xml
+/modules.xml
+/network-slicing-6g.iml
+/other.xml
+/inspectionProfiles/profiles_settings.xml
+/vcs.xml
