@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="network-slicing-6g" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="INDA_network_slicing" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="network-slicing" project-jdk-type="Python SDK" />
 </project>
